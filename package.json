@@ -1,14 +1,14 @@
 {
   "name": "hide-chat",
   "version": "1.0.0",
-  "description": "تطبيق محادثة خاص مع تخزين محلي",
+  "description": "تطبيق محادثة خاص مع تخزين محلي واتصال في الوقت الحقيقي",
   "main": "index.html",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview"
   },
-  "keywords": ["chat", "private", "webRTC"],
+  "keywords": ["chat", "private", "websocket", "realtime"],
   "author": "Your Name",
   "license": "MIT",
   "devDependencies": {
