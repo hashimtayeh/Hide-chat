@@ -1,16 +1,24 @@
 {
-  "name": "hide-chat",
+  "name": "hide-chat-backend",
   "version": "1.0.0",
   "description": "تطبيق محادثة خاص مع تخزين محلي واتصال في الوقت الحقيقي",
-  "main": "index.html",
+  "main": "server.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
-  "keywords": ["chat", "private", "websocket", "realtime"],
+  "keywords": [
+    "chat",
+    "private",
+    "websocket",
+    "realtime"
+  ],
   "author": "Your Name",
   "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.0"
+  },
   "devDependencies": {
     "vite": "^4.0.0"
   }
