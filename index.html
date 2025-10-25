@@ -1329,6 +1329,15 @@
             currentChat = chats.find(chat => chat.id === chatId);
             if (!currentChat) return;
             
+            // ---  ✨ هذا هو الإصلاح ✨ ---
+            // أخبر الخادم أننا أصبحنا نشطين في هذه الغرفة
+            sendSocketMessage({
+                type: 'join_chat',
+                chatId: currentChat.id,
+                userId: currentUser.id
+            });
+            // ---  ✨ نهاية الإصلاح ✨ ---
+
             // إعادة تعيين الرسائل غير المقروءة
             currentChat.unread = 0;
             saveChats();
