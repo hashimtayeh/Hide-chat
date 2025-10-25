@@ -1138,12 +1138,17 @@
                 showNotification('لا يمكن بدء محادثة مع نفسك', 'error');
                 return;
             }
+
+            // ---  ✨ هذا هو الإصلاح ✨ ---
+            // إنشاء معرف محادثة ثابت ومحدد بناءً على المستخدمين
+            // نقوم بفرز المعرفات أبجديًا لضمان حصول كلا الطرفين على نفس المعرف
+            const participants = [currentUser.id, userId].sort();
+            const chatId = `direct_${participants[0]}-${participants[1]}`;
+            // ---  ✨ نهاية الإصلاح ✨ ---
             
             // التحقق من وجود محادثة مع هذا المستخدم مسبقًا
-            const existingChat = chats.find(chat => 
-                chat.type === 'direct' && 
-                chat.participants.includes(userId)
-            );
+            // (تم تحديث هذا السطر ليستخدم المعرف الجديد)
+            const existingChat = chats.find(chat => chat.id === chatId); 
             
             if (existingChat) {
                 switchToChat(existingChat.id);
@@ -1152,9 +1157,9 @@
             }
             
             // إنشاء محادثة جديدة
-            const chatId = 'direct_' + Date.now();
+            // const chatId = 'direct_' + Date.now(); // <--- (تم حذف السطر القديم)
             const newChat = {
-                id: chatId,
+                id: chatId, // <--- نستخدم المعرف الجديد المشترك
                 type: 'direct',
                 participants: [currentUser.id, userId],
                 messages: [],
