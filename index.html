@@ -606,7 +606,6 @@
     </style>
 </head>
 <body>
-    <!-- تأثيرات الخلفية -->
     <div class="glow-effect">
         <div class="glow-circle glow-1"></div>
         <div class="glow-circle glow-2"></div>
@@ -615,7 +614,6 @@
     <div class="container">
         <header>
             <div class="logo">
-                <!-- شعار HC -->
                 <svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
                     <defs>
                         <linearGradient id="primaryGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -629,11 +627,9 @@
                             <stop offset="100%" style="stop-color:#00ffcc;stop-opacity:1" />
                         </linearGradient>
                     </defs>
-                    <!-- حرف H -->
                     <rect x="95" y="120" width="22" height="160" rx="11" ry="11" fill="url(#primaryGradient)"/>
                     <rect x="163" y="120" width="22" height="160" rx="11" ry="11" fill="url(#primaryGradient)"/>
                     <rect x="95" y="191" width="90" height="22" rx="11" ry="11" fill="url(#primaryGradient)"/>
-                    <!-- حرف C -->
                     <path d="M 215 140
                              A 60 60 0 0 1 275 200
                              A 60 60 0 0 1 215 260"
@@ -665,8 +661,7 @@
                     المحادثات
                 </div>
                 <ul class="chat-list" id="chat-list">
-                    <!-- سيتم ملؤها بالجافاسكريبت -->
-                </ul>
+                    </ul>
             </div>
 
             <div class="chat-area">
@@ -682,7 +677,6 @@
                     </div>
                 </div>
                 <div class="messages-container" id="messages-container">
-                    <!-- الرسائل ستظهر هنا -->
                     <div class="empty-state">
                         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                             <path d="M20 2H4C2.9 2 2 2.9 2 4V22L6 18H20C21.1 18 22 17.1 22 16V4C22 2.9 21.1 2 20 2Z" fill="currentColor"/>
@@ -699,7 +693,6 @@
         </div>
     </div>
 
-    <!-- نافذة إنشاء محادثة جديدة -->
     <div class="modal" id="new-chat-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -736,7 +729,6 @@
         </div>
     </div>
 
-    <!-- نافذة عرض رمز المحادثة الجماعية -->
     <div class="modal" id="group-code-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -749,7 +741,6 @@
         </div>
     </div>
 
-    <!-- إشعارات -->
     <div class="notification" id="notification">
         <div id="notification-text"></div>
     </div>
@@ -764,14 +755,29 @@
         let chats = [];
         let currentChat = null;
         let socket = null;
-        let peerConnection = null;
-        let localStream = null;
-        let remoteStream = null;
         let typingTimeout = null;
         let isConnected = false;
 
+        // ✨ --- جديد: متغيرات المكالمات (WebRTC) --- ✨
+        let peerConnection = null;
+        let localStream = null;
+        let remoteStream = new MediaStream();
+        let isCallInProgress = false;
+        // خوادم STUN (للمساعدة في اختراق الجدران النارية)
+        const STUN_SERVERS = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        // ✨ --- نهاية الإضافة --- ✨
+
+
         // خادم WebSocket (يمكن استبداله بخادم حقيقي)
-        const WS_SERVER = 'wss://hide-chat.onrender.com';
+        // ⚠️⚠️⚠️ انتبه: قم بتغيير هذا الرابط إلى رابط خادم Render الخاص بك ⚠️⚠️⚠️
+        const WS_SERVER = 'wss://hide-chat.onrender.com'; // للإنتاج
+        // const WS_SERVER = 'ws://localhost:10000'; // للاختبار المحلي
+
 
         // تهيئة التطبيق
         document.addEventListener('DOMContentLoaded', function() {
@@ -882,9 +888,12 @@
 
         // معالجة الرسائل الواردة من WebSocket
         function handleSocketMessage(message) {
+            // (لمنع تكرار الرسائل من الخادم القديم إذا كان لا يزال يتصل)
+            if (message.sender === currentUser.id) return; 
+
             switch(message.type) {
                 case 'user_joined':
-                    showNotification(`المستخدم ${message.userId} انضم إلى المحادثة`, 'success');
+                    // (يمكننا تركها فارغة، الخادم يتعامل معها)
                     break;
                     
                 case 'user_left':
@@ -903,17 +912,23 @@
                     hideTypingIndicator();
                     break;
                     
-                case 'call_request':
-                    handleCallRequest(message);
+                // --- ✨ منطق المكالمات الجديد --- ✨
+                case 'webrtc_offer':
+                    handleOffer(message);
                     break;
                     
-                case 'call_response':
-                    handleCallResponse(message);
+                case 'webrtc_answer':
+                    handleAnswer(message);
                     break;
                     
-                case 'ice_candidate':
+                case 'webrtc_ice_candidate':
                     handleICECandidate(message);
                     break;
+
+                case 'call_end':
+                    endCall(false); // false = لا ترسل إشعار إنهاء
+                    break;
+                // --- ✨ نهاية التعديل --- ✨
             }
         }
 
@@ -1125,7 +1140,7 @@
             document.getElementById('group-code-modal').style.display = 'none';
         }
 
-        // بدء محادثة مباشرة
+        // ✨ --- بدء محادثة مباشرة (تم التعديل) --- ✨
         function startDirectChat() {
             const userId = document.getElementById('direct-user-id').value.trim().toUpperCase();
             
@@ -1157,7 +1172,7 @@
             }
             
             // إنشاء محادثة جديدة
-            // const chatId = 'direct_' + Date.now(); // <--- (تم حذف السطر القديم)
+            // const chatId = 'direct_' + Date.now(); // (تم حذف السطر القديم)
             const newChat = {
                 id: chatId, // <--- نستخدم المعرف الجديد المشترك
                 type: 'direct',
@@ -1171,7 +1186,7 @@
             chats.push(newChat);
             saveChats();
             renderChatList();
-            switchToChat(chatId);
+            switchToChat(chatId); // <-- هذا سيقوم بإرسال "join_chat" تلقائياً
             hideNewChatModal();
             
             document.getElementById('direct-user-id').value = '';
@@ -1198,7 +1213,7 @@
             chats.push(newChat);
             saveChats();
             renderChatList();
-            switchToChat(chatId);
+            switchToChat(chatId); // <-- ✨ إصلاح: الانضمام فوراً بعد الإنشاء
             hideNewChatModal();
             showGroupCodeModal(groupCode);
             showNotification(`تم إنشاء محادثة جماعية برمز ${groupCode}`, 'success');
@@ -1248,7 +1263,7 @@
             
             saveChats();
             renderChatList();
-            switchToChat(chatId);
+            switchToChat(chatId); // <-- الانضمام فوراً
             hideNewChatModal();
             
             document.getElementById('group-code').value = '';
@@ -1324,7 +1339,7 @@
             });
         }
 
-        // التبديل إلى محادثة محددة
+        // ✨ --- التبديل إلى محادثة (تم التعديل) --- ✨
         function switchToChat(chatId) {
             currentChat = chats.find(chat => chat.id === chatId);
             if (!currentChat) return;
@@ -1458,7 +1473,7 @@
                 sendTypingIndicator(false);
                 
                 // إظهار تأكيد الإرسال
-                showNotification('تم إرسال الرسالة', 'success');
+                // showNotification('تم إرسال الرسالة', 'success'); // (اختياري: يمكن إلغاء تفعيله لتقليل الإزعاج)
             }
         }
 
@@ -1484,88 +1499,173 @@
             }
         }
 
-        // بدء مكالمة صوتية
-        async function startCall() {
-            if (!currentChat || currentChat.type !== 'direct' || !isConnected) return;
+        // ✨ --- مجموعة دوال المكالمات الجديدة (تم استبدال الدوال القديمة) --- ✨
+
+        // (دالة مساعدة لإعداد الاتصال)
+        async function setupPeerConnection(otherUserId) {
+            peerConnection = new RTCPeerConnection(STUN_SERVERS);
+
+            // إضافة مسار الصوت المحلي للاتصال
+            if (!localStream) {
+                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            }
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // (إعداد عنصر صوت لتشغيل صوت الطرف الآخر)
+            let remoteAudio = document.getElementById('remote-audio');
+            if (!remoteAudio) {
+                remoteAudio = document.createElement('audio');
+                remoteAudio.id = 'remote-audio';
+                remoteAudio.autoplay = true;
+                document.body.appendChild(remoteAudio);
+            }
             
-            try {
-                // الحصول على صلاحيات الميكروفون
-                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                
-                // إرسال طلب مكالمة
-                const otherParticipant = currentChat.participants.find(p => p !== currentUser.id);
-                sendSocketMessage({
-                    type: 'call_request',
-                    chatId: currentChat.id,
-                    from: currentUser.id,
-                    to: otherParticipant
+            // عندما يأتي مسار الصوت من الطرف الآخر
+            peerConnection.ontrack = (event) => {
+                event.streams[0].getTracks().forEach(track => {
+                    remoteStream.addTrack(track);
                 });
+                remoteAudio.srcObject = remoteStream;
+            };
+
+            // عندما ينشئ المتصفح "مرشح" (طريق للاتصال)
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSocketMessage({
+                        type: 'webrtc_ice_candidate',
+                        to: otherUserId,
+                        from: currentUser.id,
+                        chatId: currentChat.id,
+                        candidate: event.candidate
+                    });
+                }
+            };
+        }
+
+        // 1. بدء المكالمة (إنشاء العرض)
+        async function startCall() {
+            if (!currentChat || currentChat.type !== 'direct') return;
+            const otherUserId = currentChat.participants.find(p => p !== currentUser.id);
+
+            try {
+                await setupPeerConnection(otherUserId);
                 
-                showNotification('جاري بدء المكالمة...', 'success');
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                sendSocketMessage({
+                    type: 'webrtc_offer',
+                    to: otherUserId,
+                    from: currentUser.id,
+                    chatId: currentChat.id,
+                    offer: offer
+                });
+
+                showNotification('جاري طلب المكالمة...', 'success');
                 document.getElementById('start-call-btn').style.display = 'none';
                 document.getElementById('end-call-btn').style.display = 'inline-block';
-                
-            } catch (error) {
-                console.error('Error starting call:', error);
-                showNotification('فشل في بدء المكالمة. تأكد من السماح بالوصول إلى الميكروفون.', 'error');
+                isCallInProgress = true;
+
+            } catch (err) {
+                console.error('Error starting call:', err);
+                showNotification('فشل بدء المكالمة. تأكد من إذن الميكروفون.', 'error');
             }
         }
 
-        // معالجة طلب مكالمة وارد
-        function handleCallRequest(message) {
-            if (confirm(`المستخدم ${message.from} يطلب إجراء مكالمة صوتية. هل تقبل؟`)) {
-                // قبول المكالمة
-                sendSocketMessage({
-                    type: 'call_response',
-                    chatId: message.chatId,
-                    from: currentUser.id,
-                    to: message.from,
-                    accepted: true
-                });
+        // 2. معالجة العرض (الطرف المتلقي)
+        async function handleOffer(message) {
+            if (isCallInProgress) return; // تجاهل إذا كان في مكالمة
+
+            const confirmCall = confirm(`المستخدم ${message.from} يتصل بك. هل تقبل؟`);
+            if (!confirmCall) {
+                // (يمكن إرسال رسالة رفض)
+                return;
+            }
+
+            try {
+                await setupPeerConnection(message.from);
                 
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                sendSocketMessage({
+                    type: 'webrtc_answer',
+                    to: message.from,
+                    from: currentUser.id,
+                    chatId: message.chatId,
+                    answer: answer
+                });
+
                 showNotification('تم قبول المكالمة', 'success');
                 document.getElementById('start-call-btn').style.display = 'none';
                 document.getElementById('end-call-btn').style.display = 'inline-block';
-            } else {
-                // رفض المكالمة
+                isCallInProgress = true;
+
+            } catch (err) {
+                console.error('Error handling offer:', err);
+            }
+        }
+
+        // 3. معالجة الرد (الطرف البادئ)
+        async function handleAnswer(message) {
+            if (peerConnection && !peerConnection.currentRemoteDescription) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                showNotification('تم الرد على المكالمة، المكالمة جارية.', 'success');
+            }
+        }
+
+        // 4. معالجة مرشحات ICE (كلا الطرفين)
+        async function handleICECandidate(message) {
+            if (peerConnection && message.candidate) {
+                try {
+                    await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+                } catch (err) {
+                    console.error('Error adding ICE candidate:', err);
+                }
+            }
+        }
+
+        // 5. إنهاء المكالمة
+        function endCall(notifyServer = true) {
+            if (isCallInProgress && notifyServer && currentChat) {
+                const otherUserId = currentChat.participants.find(p => p !== currentUser.id);
                 sendSocketMessage({
-                    type: 'call_response',
-                    chatId: message.chatId,
+                    type: 'call_end',
+                    to: otherUserId,
                     from: currentUser.id,
-                    to: message.from,
-                    accepted: false
+                    chatId: currentChat.id
                 });
             }
-        }
 
-        // معالجة رد على طلب مكالمة
-        function handleCallResponse(message) {
-            if (message.accepted) {
-                showNotification(`المستخدم ${message.from} قبل المكالمة`, 'success');
-                // هنا يمكن بدء إعداد اتصال WebRTC
-            } else {
-                showNotification(`المستخدم ${message.from} رفض المكالمة`, 'warning');
-                document.getElementById('start-call-btn').style.display = 'inline-block';
-                document.getElementById('end-call-btn').style.display = 'none';
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
             }
-        }
-
-        // معالجة مرشح ICE
-        function handleICECandidate(message) {
-            // معالجة مرشح ICE لاتصال WebRTC
-        }
-
-        // إنهاء المكالمة الصوتية
-        function endCall() {
             if (localStream) {
                 localStream.getTracks().forEach(track => track.stop());
                 localStream = null;
             }
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(track => track.stop());
+                remoteStream = new MediaStream(); // إعادة تعيين
+            }
             
+            let remoteAudio = document.getElementById('remote-audio');
+            if (remoteAudio) {
+                remoteAudio.srcObject = null;
+            }
+
             showNotification('تم إنهاء المكالمة', 'success');
             document.getElementById('start-call-btn').style.display = 'inline-block';
             document.getElementById('end-call-btn').style.display = 'none';
+            isCallInProgress = false;
         }
+        // ✨ --- نهاية مجموعة دوال المكالمات --- ✨
+
 
         // عرض الإشعارات
         function showNotification(message, type = 'success') {
